@@ -1,0 +1,100 @@
+#!/bin/bash
+
+## Print the path to this script
+echo "Path to this script: $0"
+
+# Define base URLs for different actions
+declare -A actions
+actions["sites"]="https://p6-eu-author.samsung.com/sites.html/content/samsung"
+actions["editor"]="https://p6-eu-author.samsung.com/editor.html/content/samsung"
+actions["assets"]="https://p6-eu-author.samsung.com/assets.html/content/dam/samsung"
+actions["qa"]="https://p6-qa.samsung.com"
+actions["test"]="https://p6-eu-author.samsung.com/sites.html/content/samsung/Test/p-test-space"
+actions["qalink"]="C:\Users\p.andrys\bin\QA-link.html" 
+actions["login"]="https://p6-eu-author.samsung.com/aemapi/user/login_sso?s_user_email=p.andrys@samsung.com"
+
+# Function to open URL in default browser
+open_url() {
+    local url=$1
+    if command -v xdg-open &> /dev/null; then
+        xdg-open "$url"
+    elif command -v open &> /dev/null; then
+        open "$url"
+    elif command -v start &> /dev/null; then
+        start "$url"
+    else
+        echo "Cannot determine the platform or appropriate command to open URL: $url"
+        return 1
+    fi
+    echo "Opened $url"
+}
+
+# Function to handle action
+handle_action() {
+    local action=$1
+    local customString=$2
+    if [[ ${actions[$action]+_} ]]; then
+        url="${actions[$action]}"
+        # If the action is not "qalink" or "login", prompt for a custom string if not provided
+        if [[ "$action" != "qalink" && "$action" != "login" ]]; then
+            if [ -z "$customString" ]; then
+                read -p "Enter a custom string (or press enter to skip): " customString
+            fi
+            # If a custom string is provided, append it to the URL
+            if [ -n "$customString" ]; then
+                url="$url/$customString"
+            fi
+        fi
+        # Open the URL
+        open_url "$url"
+        return 0
+    else
+        echo "Invalid action: $action"
+        return 1
+    fi
+}
+
+# Function to display options and get user selection
+select_option() {
+    echo "What option do you want?"
+    PS3="Please select an option: "
+    options=("sites" "editor" "assets" "qa" "test" "qalink" "login" "Quit")
+    select action in "${options[@]}"; do
+        if [[ "$action" == "Quit" ]]; then
+            echo "Goodbye!"
+            return 0
+        else
+            handle_action "$action"
+            return $?
+        fi
+    done
+}
+
+# Parse command-line options
+while getopts ":l" opt; do
+    case ${opt} in
+        l )
+            select_option
+            exit $?
+            ;;
+        \? )
+            echo "Usage: $0 [-l] [action] [customString]"
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# If no arguments are provided, prompt the user for input
+if [ $# -eq 0 ]; then
+    select_option
+    exit $?
+fi
+
+# Get action and custom string from command-line arguments
+action=$1
+customString=$2
+
+# Handle the action
+handle_action "$action" "$customString"
+exit $?

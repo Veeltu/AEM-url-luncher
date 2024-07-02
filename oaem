@@ -1,0 +1,167 @@
+#!/bin/bash
+
+# ANSI color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Function to check color support
+check_color_support() {
+    if [ -t 1 ]; then
+        ncolors=$(tput colors)
+        if [ -n "$ncolors" ] && [ $ncolors -ge 8 ]; then
+            return 0  # Colors are supported
+        fi
+    fi
+    # If we get here, colors are not supported
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    MAGENTA=''
+    CYAN=''
+    BOLD=''
+    NC=''
+}
+
+# Call this function to ensure color support
+check_color_support
+
+# Define base URLs for different actions
+declare -A actions
+actions["sites"]="https://p6-eu-author.samsung.com/sites.html/content/samsung"
+actions["editor"]="https://p6-eu-author.samsung.com/editor.html/content/samsung"
+actions["assets"]="https://p6-eu-author.samsung.com/assets.html/content/dam/samsung"
+actions["qa"]="https://p6-qa.samsung.com"
+actions["test"]="https://p6-eu-author.samsung.com/sites.html/content/samsung/Test/p-test-space"
+actions["qalink"]="C:\Users\p.andrys\bin\QA-link.html" 
+actions["login"]="https://p6-eu-author.samsung.com/aemapi/user/login_sso?s_user_email=p.andrys@samsung.com"
+actions["edit"]="$0"  # $0 is the path to the current script
+
+# Function to open URL or file in default browser or editor
+open_url() {
+    local target=$1
+    if [[ "$target" == http* ]]; then
+        # It's a URL
+        if command -v xdg-open &> /dev/null; then
+            xdg-open "$target"
+        elif command -v open &> /dev/null; then
+            open "$target"
+        elif command -v start &> /dev/null; then
+            start "$target"
+        else
+            echo -e "${RED}Cannot determine the platform or appropriate command to open URL: $target${NC}"
+            return 1
+        fi
+    else
+        # It's a file path
+        if command -v code &> /dev/null; then
+            code "$target"  # Opens in Visual Studio Code
+        elif command -v gedit &> /dev/null; then
+            gedit "$target"  # Opens in Gedit
+        elif command -v nano &> /dev/null; then
+            nano "$target"  # Opens in nano
+        else
+            echo -e "${RED}No suitable text editor found to open: $target${NC}"
+            return 1
+        fi
+    fi
+    echo -e "${GREEN}Opened $target${NC}"
+}
+
+# Function to handle action
+handle_action() {
+    local action=$1
+    local customString=$2
+    if [[ ${actions[$action]+_} ]]; then
+        url="${actions[$action]}"
+        # If the action is not "qalink", "login", or "edit", prompt for a custom string if not provided
+        if [[ "$action" != "qalink" && "$action" != "login" && "$action" != "edit" ]]; then
+            if [ -z "$customString" ]; then
+                echo -e "${YELLOW}"
+                read -p "Enter a custom string (or press enter to skip): " customString
+                echo -e "${NC}"
+            fi
+            # If a custom string is provided, append it to the URL
+            if [ -n "$customString" ]; then
+                url="$url/$customString"
+            fi
+        fi
+        # Open the URL or file
+        open_url "$url"
+        return 0
+    else
+        echo -e "${RED}Invalid action: $action${NC}"
+        return 1
+    fi
+}
+
+# Function to display options and get user selection
+select_option() {
+    echo -e "${BOLD}${BLUE}=== Samsung AEM URL Opener ===${NC}"
+    echo -e "${YELLOW}Available options:${NC}"
+    echo -e "  ${CYAN}sites${NC}   - Open Sites"
+    echo -e "  ${CYAN}editor${NC}  - Open Editor - add .html"
+    echo -e "  ${CYAN}assets${NC}  - Open Assets img/video"
+    echo -e "  ${CYAN}qa${NC}      - Open QA Environment"
+    echo -e "  ${CYAN}test${NC}    - Open My Test AEM Space"
+    echo -e "  ${CYAN}qalink${NC}  - Open QA Link"
+    echo -e "  ${CYAN}login${NC}   - Open Login Page"
+    echo -e "  ${CYAN}edit${NC}    - Edit this script"
+    echo -e "${MAGENTA}Type 'quit' to exit${NC}"
+    
+    while true; do
+        echo -e "${BOLD}${GREEN}"
+        read -p "Please enter your choice: " action
+        echo -e "${NC}"
+        action=$(echo "$action" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
+        case "$action" in
+            sites|editor|assets|qa|test|qalink|login|edit)
+                handle_action "$action"
+                return $?
+                ;;
+            quit)
+                echo -e "${YELLOW}Goodbye!${NC}"
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Invalid option. Please try again.${NC}"
+                echo -e "${YELLOW}Available options: ${CYAN}sites, editor, assets, qa, test, qalink, login, edit${NC}"
+                ;;
+        esac
+    done
+}
+
+# Parse command-line options
+while getopts ":l" opt; do
+    case ${opt} in
+        l )
+            select_option
+            exit $?
+            ;;
+        \? )
+            echo -e "${RED}Usage: $0 [-l] [action] [customString]${NC}"
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# If no arguments are provided, prompt the user for input
+if [ $# -eq 0 ]; then
+    select_option
+    exit $?
+fi
+
+# Get action and custom string from command-line arguments
+action=$1
+customString=$2
+
+# Handle the action
+handle_action "$action" "$customString"
+exit $?
